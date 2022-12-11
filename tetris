@@ -1,0 +1,221 @@
+#!/bin/php
+<?php
+define('Width',max(6,intval($argv[2]??11)));
+define('Height',max(6,intval($argv[2]??21)));
+define('bottom',"▄");
+define('top',"▀");
+define('full',"█");
+// Y, X
+
+class screen{
+	static $color = [
+		0=>"\033[0m\e[0m",
+		1=>"\033[0;32m"
+	];
+	static $Elements=[
+		0=>[
+			[0,0],
+			[1,0],
+			[2,0],
+			[2,1]
+		],
+		1=>[
+			[0,0],
+			[0,1],
+			[1,0],
+			[1,1],
+		],
+		2=>[
+			[0,1],
+			[1,0],
+			[1,1],
+			[1,2],
+		],
+		3=>[
+			[0,0],
+			[0,1],
+			[0,2],
+			[0,3],
+		],
+		4=>[
+			[0,0],
+			[0,1],
+			[0,2],
+		],
+	];
+	static $time=0;
+	static $X=2;
+	static $Y=1;
+	static $velY=0;
+	static $ang=0;
+	static $currentItem=0;
+	static $stone=[];
+	static $loose = false;
+	static $score=0;
+	static function title(){
+		$title=" TETRIS ";
+		$middle=(Width - strlen($title))/2;
+		$bar="";
+		for($i=0;$i<$middle;$i++){
+			$bar.="─";
+		}
+		return "┌".$bar.$title.$bar."┐\n";
+	}
+	static function footer(){
+		$size=Width;
+		$bar="";
+		for($i=0;$i<=$size;$i++){
+			$bar.="▔";
+		}
+		return "▔".$bar."▔\n";
+	}
+	static function showTic(){
+		return " Tic: ".self::$time." | Score: ".self::$score." ~ ".self::$ang."\n";
+	}
+	static function load(){
+		self::$element[3][7] = -1;
+	}
+	static function maxSize($array,$col){
+		$max=0;
+		foreach ($array as $pixel) {
+			if($pixel[$col]>$max){
+				$max = $pixel[$col];
+			}
+		}
+		return $max;
+	}
+
+	static function nextStep($table){
+		self::$Y=0;
+		self::$score++;
+		self::$currentItem = random_int(0, count(self::$Elements)-1);
+		self::$stone = $table;
+	}
+
+	static function loop($c){
+		if($c){
+			switch ($c) {
+			case '67':
+				self::$X++;
+				break;
+			case '68':
+				self::$X--;
+				break;
+			case '65':
+				self::$ang++;
+				if(self::$ang>3) self::$ang=0;
+				break;
+			case '66':
+				self::$Y++;
+				break;
+			}
+		}
+
+		$printer="";
+		system('clear');
+		$printer.= screen::title();
+		$table=self::$stone;
+		self::$time++;
+		$elmt = self::$Elements[self::$currentItem];
+		$maxH = self::maxSize($elmt,0);
+		$maxW = self::maxSize($elmt,1);
+		$item=[];
+		$offsetX=0;
+		$offsetY=0;
+		foreach ($elmt as $pixel) {
+			switch(self::$ang){
+				case 1:
+					$y = self::$Y+$maxH-$pixel[1];
+					$x = self::$X+$pixel[0];
+					break;
+				case 2:
+					$y = self::$Y+$maxH-$pixel[0];
+					$x = self::$X+$maxW-$pixel[1];
+					break;
+				case 3:
+					$y = self::$Y+$pixel[1];
+					$x = self::$X+$maxW-$pixel[0];
+					break;
+				default:
+					$y = self::$Y+$pixel[0];
+					$x = self::$X+$pixel[1];
+					break;
+			}
+			if($x<0){
+				$offsetX=0-$x;
+			}
+			if($x>Width){
+				$offsetX=Width-$x;
+			}
+			$item[]=[$y,$x];
+		}
+		$nextStep=false;
+		foreach ($item as $v) {
+			$table[$v[0]][$v[1]+$offsetX]=self::$score+1;
+			if(isset($table[$v[0]+1][$v[1]+$offsetX]) && $table[$v[0]+1][$v[1]+$offsetX] > 0 && $table[$v[0]+1][$v[1]+$offsetX] <= self::$score){
+				$nextStep=true;
+			}
+		}
+		self::$X+=$offsetX;
+
+		$nextStep = ($nextStep || self::$Y+$maxH>=Height);
+		if($nextStep) self::nextStep($table);
+
+		for($i=0;$i<=Height;$i=$i+2){
+			$printer.=  "│";
+			for($j=0;$j<=Width;$j++){
+				if(isset($table[$i][$j]) && gettype($table[$i][$j])=='integer'){
+					if(isset($table[$i+1][$j]) && gettype($table[$i+1][$j])=='integer'){
+						$printer.= self::colorize(full);
+					}else{
+						$printer.= self::colorize(top);
+					}
+				}else{
+					if(isset($table[$i+1][$j]) && gettype($table[$i+1][$j])=='integer'){
+						$printer.= self::colorize(bottom);
+					}else{
+						$printer.= " ";
+					}
+				}
+			}
+			$printer.=  "│\n";
+		}
+		self::$velY++;
+		if(self::$velY>5) {
+			self::$velY = 0;
+			self::$Y++;
+		}
+		$printer.= screen::footer();
+		echo $printer.self::showTic();
+	}
+	static function colorize($text,$color=1){
+		if($color==0) return $text;
+		return self::$color[1].$text.self::$color[0];
+	}
+}
+function getDeltaTime(){
+	$t=microtime();
+	$a=explode(" ", $t);
+	$v = $a[0] + $a[1];
+	return $v;
+}
+
+system('stty cbreak -echo');
+$stdin = fopen('php://stdin', 'r');
+stream_set_blocking($stdin, false);
+$time=getDeltaTime();
+$frameDelta=70;
+$key=0;
+
+
+while (!screen::$loose) {
+	$ord = ord(fgetc($stdin));
+	if($ord){
+		$key = $ord;
+	}
+	if($time+$frameDelta/1000 < getDeltaTime()){
+		$time=getDeltaTime();
+		screen::loop($key);
+		$key=0;
+	}
+}

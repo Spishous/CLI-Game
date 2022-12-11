@@ -1,0 +1,162 @@
+#!/bin/php
+<?php
+define('Width',max(6,intval($argv[2]??20)));
+define('Height',max(6,intval($argv[2]??20)));
+define('bottom',"▄");
+define('top',"▀");
+define('full',"█");
+
+class screen{
+	static $time=0;
+	static $X=2;
+	static $Y=3;
+	static $ang;
+	static $lenght=4;
+	static $element=[];
+	static $item=[];
+	static $loose = false;
+	static $score=0;
+	static function title(){
+		$title=" SNAKE ";
+		$middle=(Width - strlen($title))/2;
+		$bar="";
+		for($i=0;$i<$middle;$i++){
+			$bar.="─";
+		}
+		return "┌".$bar.$title.$bar."┐\n";
+	}
+	static function footer(){
+		$size=Width;
+		$bar="";
+		for($i=0;$i<=$size;$i++){
+			$bar.="─";
+		}
+		return "└".$bar."┘\n";
+	}
+	static function showTic(){
+		return " Tic: ".self::$time." | Score: ".self::$score."\n";
+	}
+	static function load(){
+		self::$element[3][7] = -1;
+	}
+
+	static function loop($c){
+		if($c){
+			switch ($c) {
+			case '67':
+				if(self::$ang == '68') break;
+				self::$ang = $c;
+			case '68':
+				if(self::$ang == '67') break;
+				self::$ang = $c;
+			case '65':
+				if(self::$ang == '66') break;
+				self::$ang = $c;
+			case '66':
+				if(self::$ang == '65') break;
+				self::$ang = $c;
+			}
+		}
+		switch (self::$ang) {
+			case '67':
+				self::$X++;
+				break;
+			case '68':
+				self::$X--;
+				break;
+			case '65':
+				self::$Y--;
+				break;
+			case '66':
+				self::$Y++;
+				break;
+		}
+
+		$printer="";
+		system('clear');
+		$printer.= screen::title();
+		$table=[[]];
+		if(self::$ang){
+					self::$time++;
+			if(self::$Y<0){
+				self::$Y=Height+1;
+			}
+			if(self::$X<0){
+				self::$X=Width;
+			}
+			if(self::$Y>Height+1){
+				self::$Y=0;
+			}
+			if(self::$X>Width){
+				self::$X=0;
+			}
+			if(self::$Y == self::$item[0] && self::$X == self::$item[1]){
+				self::$lenght+=2;
+				self::$score++;
+				self::$item = [random_int(0, Width),random_int(0, Height)];
+			}
+			self::$element = array_slice(self::$element,- self::$lenght);
+			foreach (self::$element as $pos) {
+				$table[$pos[0]][$pos[1]]=1;
+			}
+			if(@$table[self::$Y][self::$X]==1){
+				self::$loose = true;
+			}else{
+				self::$element[]=[self::$Y,self::$X];
+				$table[self::$Y][self::$X]=1;
+			}
+		}else{
+			$table[self::$Y][self::$X]=1;
+		}
+		$table[self::$item[0]][self::$item[1]]=1;
+
+		for($i=0;$i<=Height;$i=$i+2){
+			$printer.=  "│";
+			for($j=0;$j<=Width;$j++){
+				if(isset($table[$i][$j]) && gettype($table[$i][$j])=='integer'){
+					if(isset($table[$i+1][$j]) && gettype($table[$i+1][$j])=='integer'){
+						$printer.= full;
+					}else{
+						$printer.= top;
+					}
+				}else{
+					if(isset($table[$i+1][$j]) && gettype($table[$i+1][$j])=='integer'){
+						$printer.= bottom;
+					}else{
+						$printer.= " ";
+					}
+				}
+			}
+			$printer.=  "│\n";
+		}
+		$printer.= screen::footer();
+		echo $printer.self::showTic();
+	}
+}
+function getDeltaTime(){
+	$t=microtime();
+	$a=explode(" ", $t);
+	$v = $a[0] + $a[1];
+	return $v;
+}
+
+system('stty cbreak -echo');
+$stdin = fopen('php://stdin', 'r');
+stream_set_blocking($stdin, false);
+$time=getDeltaTime();
+$frameDelta=110;
+$key=0;
+screen::$lenght = max(0,intval($argv[1]??4));
+screen::$item = [random_int(0, Width),random_int(0, Height)];
+
+while (!screen::$loose) {
+	$ord = ord(fgetc($stdin));
+	if($ord){
+		$key = $ord;
+	}
+	if($time+$frameDelta/1000 < getDeltaTime()){
+		$time=getDeltaTime();
+		screen::loop($key);
+		$key=0;
+	}
+}
